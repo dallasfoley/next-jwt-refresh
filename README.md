@@ -4,21 +4,27 @@ This repository provides a comprehensive solution for handling JWT token refresh
 
 ## Installation
 
-\`\`\`bash
+```bash
 npm install next-jwt-refresh
-\`\`\`
+```
+
 or
-\`\`\`bash
+
+```bash
 pnpm add next-jwt-refresh
-\`\`\`
+```
+
 or
-\`\`\`bash
+
+```bash
 yarn add next-jwt-refresh
-\`\`\`
+```
+
 or
-\`\`\`bash
+
+```bash
 bun add next-jwt-refresh
-\`\`\`
+```
 
 ## API Reference
 
@@ -28,7 +34,7 @@ Main fetch wrapper function for making authenticated requests with automatic tok
 
 #### Signature
 
-\`\`\`typescript
+```typescript
 async function fetchWithRefreshRetry(
 url: string,
 options?: RequestInit,
@@ -40,7 +46,7 @@ status?: number;
 error?: string;
 data?: any;
 }>
-\'\'\'
+```
 
 #### Parameters
 
@@ -59,7 +65,7 @@ Function for calling the refresh endpoint and retrying the original request with
 
 #### Signature
 
-\`\`\`typescript
+```typescript
 async function fetchWithRefreshRetry(
 url: string,
 options?: RequestInit,
@@ -71,7 +77,7 @@ status?: number;
 error?: string;
 data?: any;
 }>
-\'\'\'
+```
 
 #### Parameters
 
@@ -90,7 +96,7 @@ Refreshes access token using refresh token from cookies.
 
 #### Signature
 
-\`\`\`typescript
+```typescript
 async function refresh(
 refreshUrl?: string,
 refreshOptions?: RequestInit
@@ -100,7 +106,7 @@ status?: number;
 error?: string;
 data?: any;
 }>
-\'\'\'
+```
 
 #### Parameters
 
@@ -117,7 +123,7 @@ Retries original request with updated access token.
 
 #### Signature
 
-\`\`\`typescript
+```typescript
 async function retry(
 url: string,
 options?: RequestInit,
@@ -127,7 +133,7 @@ status?: number;
 error?: string;
 data?: any;
 }>
-\'\'\'
+```
 
 #### Returns
 
@@ -141,7 +147,7 @@ A React component that wraps your app and provides access to
 
 ### 1. Middleware Configuration
 
-\`\`\`typescript
+```typescript
 import { NextResponse, NextRequest } from "next/server";
 import { refreshTokenMiddleware } from "next-jwt-refresh";
 
@@ -169,11 +175,11 @@ loginPath: "/login/username",
 
 return NextResponse.next();
 }
-\`\`\`
+```
 
 ### 2. Server Action/Route Handler with Token Refresh
 
-\`\`\`typescript
+```typescript
 "use server";
 
 import { fetchWithRefreshRetry } from "next-jwt-refresh";
@@ -235,7 +241,7 @@ message: "An unexpected error occurred",
 };
 }
 }
-\`\`\`
+```
 
 ## Common Cases
 
