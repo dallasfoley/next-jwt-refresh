@@ -38,13 +38,13 @@ Main fetch wrapper function for making authenticated requests with automatic tok
 async function fetchWithRefreshRetry(
 url: string,
 options?: RequestInit,
-refreshUrl?: string,
+refreshUrl: string,
 refreshOptions?: RequestInit
 ): Promise<{
 success: boolean;
-status?: number;
+status: number;
 error?: string;
-data?: any;
+data: any;
 }>
 ```
 
@@ -66,16 +66,16 @@ Function for calling the refresh endpoint and retrying the original request with
 #### Signature
 
 ```typescript
-async function fetchWithRefreshRetry(
+async function refreshAndRetry(
 url: string,
 options?: RequestInit,
-refreshUrl?: string,
+refreshUrl: string,
 refreshOptions?: RequestInit
 ): Promise<{
 success: boolean;
-status?: number;
+status: number;
 error?: string;
-data?: any;
+data: any;
 }>
 ```
 
@@ -102,7 +102,7 @@ refreshUrl?: string,
 refreshOptions?: RequestInit
 ): Promise<{
 success: boolean;
-status?: number;
+status: number;
 error?: string;
 data?: any;
 }>
@@ -142,6 +142,8 @@ A Promise that resolves to an object containing the success status, status code,
 ### **useAuthenticatedFetch**
 
 A React component that wraps your app and provides access to
+
+### **refreshTokenMiddleware(refreshUrl, refreshOptions)**
 
 ## Usage Examples
 
@@ -243,9 +245,9 @@ message: "An unexpected error occurred",
 }
 ```
 
-## Common Cases
+## Use Cases
 
-There exists a variety of scenarios where you need to make an authenicated call to your backend, but your access token may have expired. This packages aims to provides the best solution for each case.
+There exists a variety of scenarios where you need to make an authenicated call to your backend, but your access token may have expired. These scenarios can be roughly generalized into 3 cases. This packages aims to provides the best solution for each case.
 
 ### 1. Mutating Data from Client Components
 
@@ -265,7 +267,7 @@ Setting cookies cannot be done directly in a Server Component, even when using a
 
 This implies that any Server Function, including our fetch wrapper, will not be able to set cookies to store our new access token if called from a Server Component. For example, if a user navigates to a page that requires data fetching (typically done in a Server Component) but their access token has expired, you cannot set cookies after calling your refresh endpoint.
 
-The solution is to use Middleware, and particularly the _refreshTokenMiddleware_ function, to check if the token is expired before the page is rendered. If it is, the function will call your refresh endpoint
+The easiest solution is to use Middleware, and particularly the _refreshTokenMiddleware_ function, to check if the token is expired before the page is rendered. If it is, the function will call your refresh endpoint
 to set the new access token before the page is rendered.
 
 ### 3. Fetching Data from Client Components
