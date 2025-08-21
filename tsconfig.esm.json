@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "outDir": "dist/esm",
+    "noEmit": false,
+    "declaration": false,
+    "tsBuildInfoFile": "dist/esm.tsbuildinfo"
+  },
+  "exclude": ["node_modules", "dist"]
+}
