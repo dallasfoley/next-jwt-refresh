@@ -1,12 +1,16 @@
 "use server";
 
 import { refreshAndRetry } from "../refreshAndRetry";
+import { TokenConfig } from "../retry/retry";
 
 export async function fetchWithRefreshRetry(
   url: string,
   options: RequestInit = {},
   refreshUrl: string,
-  refreshOptions: RequestInit = {}
+  refreshOptions: RequestInit & {
+    responseType?: "json" | "cookies";
+    tokenNames?: TokenConfig;
+  } = {}
 ) {
   try {
     const response = await fetch(url, options);
@@ -30,6 +34,13 @@ export async function fetchWithRefreshRetry(
         };
       }
     }
+    const data = await response.json();
+    return {
+      success: true,
+      status: response.status,
+      data: data,
+      error: null,
+    };
   } catch (e) {
     return {
       success: false,

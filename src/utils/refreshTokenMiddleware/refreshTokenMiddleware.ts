@@ -1,217 +1,194 @@
 import { NextRequest, NextResponse } from "next/server";
 
+interface TokenConfig {
+  accessTokenName?: string;
+  refreshTokenName?: string;
+  authHeaderFormat?: "Bearer" | "Token" | ((token: string) => string);
+}
+
 export interface RefreshConfig {
-  /**
-   * URL of the refresh endpoint
-   */
+  /** URL of the refresh endpoint (required) */
   refreshUrl: string;
-
-  /**
-   * Request options for the refresh call (headers, method, etc.)
-   * The body will be automatically set with the refresh token
-   */
-  refreshOptions?: Omit<RequestInit, "body">;
-
-  /**
-   * Name of the access token cookie
-   * @default 'accessToken'
-   */
-  accessToken?: string;
-
-  /**
-   * Name of the refresh token cookie
-   * @default 'refreshToken'
-   */
-  refreshToken?: string;
-
-  /**
-   * Function to check if a token is expired
-   * If not provided, will attempt to decode JWT and check exp claim
-   */
-  isTokenExpired?: (token: string) => boolean;
-
-  /**
-   * Function to extract new access token from refresh response
-   * @default (data) => data.accessToken
-   */
-  extractAccessToken?: (responseData: any) => string;
-
-  /**
-   * Function to extract new refresh token from refresh response (if it rotates)
-   * @default (data) => data.refreshToken
-   */
-  extractRefreshToken?: (responseData: any) => string | undefined;
-
-  /**
-   * Paths that should trigger token refresh check
-   * Can be strings, regexes, or a function
-   * @default [] (all paths)
-   */
-  protectedPaths?: (string | RegExp)[] | ((path: string) => boolean);
-
-  /**
-   * Where to redirect if refresh fails
-   * @default '/login'
-   */
-  loginPath?: string;
-
-  /**
-   * Cookie options for setting new tokens
-   */
-  cookieOptions?: {
-    httpOnly?: boolean;
-    secure?: boolean;
-    sameSite?: "strict" | "lax" | "none";
-    maxAge?: number;
-    path?: string;
-    domain?: string;
+  /** Request options for the refresh call */
+  refreshOptions?: RequestInit & {
+    responseType?: "json" | "cookies";
+    tokenNames?: TokenConfig;
   };
-}
-
-/**
- * Default JWT token expiration checker
- * Decodes JWT and checks exp claim against current time
- */
-function defaultIsTokenExpired(token: string): boolean {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const now = Math.floor(Date.now() / 1000);
-    return payload.exp < now;
-  } catch {
-    return true; // If we can't decode it, consider it expired
-  }
-}
-
-/**
- * Checks if a path should be protected based on the config
- */
-function shouldProtectPath(
-  path: string,
-  protectedPaths?: RefreshConfig["protectedPaths"]
-): boolean {
-  if (!protectedPaths) return true; // Protect all paths by default
-
-  if (typeof protectedPaths === "function") {
-    return protectedPaths(path);
-  }
-
-  return protectedPaths.some((pattern) => {
-    if (typeof pattern === "string") {
-      return path.startsWith(pattern);
-    }
-    return pattern.test(path);
-  });
+  /** Cookie names for tokens (defaults: 'accessToken', 'refreshToken') */
+  tokenNames?: TokenConfig;
+  /** Path to redirect if refresh fails (default: '/login') */
+  loginPath?: string;
+  /** Paths that should trigger token refresh check */
+  protectedPaths?: (string | RegExp)[];
 }
 
 /**
  * Middleware function to handle JWT token refresh
- * Call this from your middleware.ts file
- *
- * @example
- * ```ts
- * import { NextRequest } from 'next/server'
- * import { refreshTokenMiddleware } from 'your-package'
- *
- * export async function middleware(request: NextRequest) {
- *   return refreshTokenMiddleware(request, {
- *     refreshUrl: '/api/auth/refresh',
- *     refreshOptions: {
- *       method: 'POST',
- *       headers: { 'Content-Type': 'application/json' }
- *     },
- *     protectedPaths: ['/dashboard', '/profile', /^\/admin/],
- *     cookieOptions: {
- *       httpOnly: true,
- *       secure: process.env.NODE_ENV === 'production',
- *       sameSite: 'lax'
- *     }
- *   })
- * }
- * ```
  */
 export async function refreshTokenMiddleware(
   request: NextRequest,
   config: RefreshConfig
 ): Promise<NextResponse> {
+  // Set defaults
   const {
     refreshUrl,
     refreshOptions = {},
-    accessToken = "accessToken",
-    refreshToken = "refreshToken",
-    isTokenExpired = defaultIsTokenExpired,
-    extractAccessToken = (data) => data.accessToken,
-    extractRefreshToken = (data) => data.refreshToken,
-    protectedPaths,
+    tokenNames = {},
     loginPath = "/login",
-    cookieOptions = {},
+    protectedPaths = [],
   } = config;
+
+  // Merge token config from both places, refreshOptions takes precedence
+  const finalTokenConfig: Required<TokenConfig> = {
+    accessTokenName: "accessToken",
+    refreshTokenName: "refreshToken",
+    authHeaderFormat: "Bearer",
+    ...tokenNames,
+    ...refreshOptions.tokenNames,
+  };
+
+  const {
+    responseType = "json",
+    tokenNames: _,
+    ...fetchOptions
+  } = refreshOptions;
 
   const path = request.nextUrl.pathname;
 
-  if (!shouldProtectPath(path, protectedPaths)) {
+  // Skip if path is not protected or is login path
+  const isProtected =
+    protectedPaths.length === 0 ||
+    protectedPaths.some((pattern) =>
+      typeof pattern === "string"
+        ? path.startsWith(pattern)
+        : pattern.test(path)
+    );
+
+  if (!isProtected || path === loginPath) {
     return NextResponse.next();
   }
 
-  if (path === loginPath) {
-    return NextResponse.next();
-  }
-
-  const newAccessToken = request.cookies.get(accessToken)?.value;
-
-  if (!refreshToken) {
-    return NextResponse.redirect(new URL(loginPath, request.url));
-  }
-
-  if (newAccessToken && !isTokenExpired(newAccessToken)) {
+  // Check if token is expired (simple check for presence)
+  const existingToken = request.cookies.get(
+    finalTokenConfig.accessTokenName
+  )?.value;
+  if (existingToken) {
     return NextResponse.next();
   }
 
   try {
+    // Attempt to refresh the token
+    const refreshTokenValue = request.cookies.get(
+      finalTokenConfig.refreshTokenName
+    )?.value;
+    if (!refreshTokenValue) {
+      throw new Error("No refresh token available");
+    }
+
     const refreshResponse = await fetch(refreshUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...refreshOptions.headers,
+        ...fetchOptions.headers,
       },
-      ...refreshOptions,
-      body: JSON.stringify({ refreshToken }),
+      ...fetchOptions,
+      body: JSON.stringify({
+        [finalTokenConfig.refreshTokenName]: refreshTokenValue,
+      }),
     });
 
     if (!refreshResponse.ok) {
       throw new Error(`Refresh failed: ${refreshResponse.status}`);
     }
 
-    const refreshData = await refreshResponse.json();
-    const newAccessToken = extractAccessToken(refreshData);
-    const newRefreshToken = extractRefreshToken(refreshData);
+    let newAccessToken: string;
+    let newRefreshToken: string | undefined;
 
+    if (responseType === "cookies") {
+      // Handle Set-Cookie headers
+      const setCookieHeader = refreshResponse.headers.get("set-cookie");
+      if (!setCookieHeader) {
+        throw new Error("No cookies returned from refresh endpoint");
+      }
+
+      const cookies = parseCookieHeader(setCookieHeader);
+      newAccessToken = cookies[finalTokenConfig.accessTokenName];
+      newRefreshToken = cookies[finalTokenConfig.refreshTokenName];
+
+      if (!newAccessToken) {
+        throw new Error(
+          `Access token not found in cookies (looking for: ${finalTokenConfig.accessTokenName})`
+        );
+      }
+    } else {
+      // Handle JSON response
+      const refreshData = await refreshResponse.json();
+
+      // Try multiple common patterns for token extraction
+      newAccessToken =
+        refreshData[finalTokenConfig.accessTokenName] ||
+        refreshData.accessToken ||
+        refreshData.token ||
+        refreshData.access_token;
+
+      newRefreshToken =
+        refreshData[finalTokenConfig.refreshTokenName] ||
+        refreshData.refreshToken ||
+        refreshData.refresh_token;
+
+      if (!newAccessToken) {
+        throw new Error(
+          `Access token not found in response (looking for: ${finalTokenConfig.accessTokenName})`
+        );
+      }
+    }
+
+    // Update cookies with new tokens
     const response = NextResponse.next();
 
-    response.cookies.set(accessToken, newAccessToken, {
+    response.cookies.set(finalTokenConfig.accessTokenName, newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60, // 1 hour default
+      maxAge: 60 * 60, // 1 hour
       path: "/",
-      ...cookieOptions,
     });
 
     if (newRefreshToken) {
-      response.cookies.set(refreshToken, newRefreshToken, {
+      response.cookies.set(finalTokenConfig.refreshTokenName, newRefreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7, // 1 week default
+        maxAge: 60 * 60 * 24 * 7, // 1 week
         path: "/",
-        ...cookieOptions,
       });
     }
-    return response;
-  } catch (error) {
-    const response = NextResponse.redirect(new URL(loginPath, request.url));
-    response.cookies.delete(accessToken);
-    response.cookies.delete(refreshToken);
 
     return response;
+  } catch (error) {
+    console.error("Token refresh failed in middleware:", error);
+    // Redirect to login on failure
+    const response = NextResponse.redirect(new URL(loginPath, request.url));
+    response.cookies.delete(finalTokenConfig.accessTokenName);
+    response.cookies.delete(finalTokenConfig.refreshTokenName);
+    return response;
   }
+}
+
+// Helper function to parse Set-Cookie header
+function parseCookieHeader(setCookieHeader: string): Record<string, string> {
+  const cookies: Record<string, string> = {};
+
+  // Split multiple Set-Cookie headers if they exist
+  const cookieStrings = setCookieHeader.split(/,(?=\s*\w+=)/);
+
+  for (const cookieString of cookieStrings) {
+    const [nameValue] = cookieString.split(";");
+    const [name, value] = nameValue.split("=").map((s) => s.trim());
+    if (name && value) {
+      cookies[name] = value;
+    }
+  }
+
+  return cookies;
 }
