@@ -1,6 +1,6 @@
 # next-jwt-refresh
 
-This repository provides a comprehensive solution for handling JWT token refreshes in Next.js App Router applications. This package works the same in either case: if you're using a separate backend or Next.js as your backend.
+This repository provides a comprehensive solution for handling JWT token refreshes in Next.js App Router applications.
 
 ## Installation
 
@@ -36,16 +36,16 @@ Main fetch wrapper function for making authenticated requests with automatic tok
 
 ```typescript
 async function fetchWithRefreshRetry(
-url: string,
-options?: RequestInit,
-refreshUrl: string,
-refreshOptions?: RequestInit
+  url: string,
+  options?: RequestInit,
+  refreshUrl: string,
+  refreshOptions?: RequestInit
 ): Promise<{
-success: boolean;
-status: number;
-error?: string;
-data: any;
-}>
+  success: boolean;
+  status: number;
+  error?: string;
+  data: any;
+}>;
 ```
 
 #### Parameters
@@ -67,16 +67,16 @@ Function for calling the refresh endpoint and retrying the original request with
 
 ```typescript
 async function refreshAndRetry(
-url: string,
-options?: RequestInit,
-refreshUrl: string,
-refreshOptions?: RequestInit
+  url: string,
+  options?: RequestInit,
+  refreshUrl: string,
+  refreshOptions?: RequestInit
 ): Promise<{
-success: boolean;
-status: number;
-error?: string;
-data: any;
-}>
+  success: boolean;
+  status: number;
+  error?: string;
+  data: any;
+}>;
 ```
 
 #### Parameters
@@ -98,14 +98,14 @@ Refreshes access token using refresh token from cookies.
 
 ```typescript
 async function refresh(
-refreshUrl?: string,
-refreshOptions?: RequestInit
+  refreshUrl?: string,
+  refreshOptions?: RequestInit
 ): Promise<{
-success: boolean;
-status: number;
-error?: string;
-data?: any;
-}>
+  success: boolean;
+  status: number;
+  error?: string;
+  data?: any;
+}>;
 ```
 
 #### Parameters
@@ -125,14 +125,14 @@ Retries original request with updated access token.
 
 ```typescript
 async function retry(
-url: string,
-options?: RequestInit,
+  url: string,
+  options?: RequestInit
 ): Promise<{
-success: boolean;
-status?: number;
-error?: string;
-data?: any;
-}>
+  success: boolean;
+  status?: number;
+  error?: string;
+  data?: any;
+}>;
 ```
 
 #### Returns
@@ -145,6 +145,26 @@ A React component that wraps your app and provides access to
 
 ### **refreshTokenMiddleware(refreshUrl, refreshOptions)**
 
+Middleware function that checks it the access token is expired and calls the refresh endpoint if it is.
+
+#### Signature
+
+```typescript
+async function refreshTokenMiddleware(
+  request: NextRequest,
+  config: RefreshConfig
+): Promise<NextResponse>;
+```
+
+#### Parameters
+
+- `request`: The Next.js request object.
+- `config`: The configuration object for the middleware.
+
+#### Returns
+
+A Promise that resolves to a NextResponse object.
+
 ## Usage Examples
 
 ### 1. Middleware Configuration
@@ -154,28 +174,30 @@ import { NextResponse, NextRequest } from "next/server";
 import { refreshTokenMiddleware } from "next-jwt-refresh";
 
 export async function middleware(request: NextRequest) {
-const protectedPaths = ["/dashboard", "/account", "/settings"];
+  const protectedPaths = ["/dashboard", "/account", "/settings"];
 
-if (!protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))) {
-return NextResponse.next();
-}
+  if (
+    !protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
+  ) {
+    return NextResponse.next();
+  }
 
-await refreshTokenMiddleware(request, {
-accessToken: request.cookies.get("accessToken")?.value,
-refreshToken: request.cookies.get("refreshToken")?.value,
-refreshUrl: `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`,
-refreshOptions: {
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-Accept: "application/json",
-},
-},
-protectedPaths: ["/admin", "/browse", "/dashboard", "/settings", "/update"],
-loginPath: "/login/username",
-});
+  await refreshTokenMiddleware(request, {
+    accessToken: request.cookies.get("accessToken")?.value,
+    refreshToken: request.cookies.get("refreshToken")?.value,
+    refreshUrl: `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`,
+    refreshOptions: {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    },
+    protectedPaths: ["/admin", "/browse", "/dashboard", "/settings", "/update"],
+    loginPath: "/login/username",
+  });
 
-return NextResponse.next();
+  return NextResponse.next();
 }
 ```
 
@@ -188,13 +210,13 @@ import { fetchWithRefreshRetry } from "next-jwt-refresh";
 import { cookies } from "next/headers";
 
 export async function addUserBook(userBook) {
-const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/user_books/${userBook.userId}/${userBook.bookId}`;
-const refreshUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`;
+  const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/user_books/${userBook.userId}/${userBook.bookId}`;
+  const refreshUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`;
 
-try {
-const cookieStore = await cookies();
-const accessToken = cookieStore.get("accessToken")?.value;
-const refreshToken = cookieStore.get("refreshToken")?.value;
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("accessToken")?.value;
+    const refreshToken = cookieStore.get("refreshToken")?.value;
 
     const options = {
       method: "POST",
@@ -234,14 +256,13 @@ const refreshToken = cookieStore.get("refreshToken")?.value;
       message: "Book added successfully!",
       data: response.data,
     };
-
-} catch (error) {
-console.error("Error in addUserBook:", error);
-return {
-success: false,
-message: "An unexpected error occurred",
-};
-}
+  } catch (error) {
+    console.error("Error in addUserBook:", error);
+    return {
+      success: false,
+      message: "An unexpected error occurred",
+    };
+  }
 }
 ```
 
@@ -270,11 +291,13 @@ This implies that any Server Function, including our fetch wrapper, will not be 
 The easiest solution is to use Middleware, and particularly the _refreshTokenMiddleware_ function, to check if the token is expired before the page is rendered. If it is, the function will call your refresh endpoint
 to set the new access token before the page is rendered.
 
-### 3. Fetching Data from Client Components
+<!-- ### 3. Fetching Data from Client Components
 
-Although not recommended by Vercel, as you cannot utilize their overloaded fetch wrapper, Data Cache, etc., the _useAuthenticatedFetch_ hook can be used to make authenticated requests from Client Components, and calls the _refreshAndRetry_ function under the hood to automatically handle token refreshes.
+Although not recommended by Vercel, as you cannot utilize their overloaded fetch wrapper, Data Cache, etc., the _useAuthenticatedFetch_ hook can be used to make authenticated requests from Client Components, and calls the _refreshAndRetry_ function under the hood to automatically handle token refreshes. -->
 
 ## Limitations
+
+If you're using Next.js as your backend, the _fetchWithRefreshRetry_ function is supposed to wrap the fetch call to your separate backend. However, if Next.js is your backend, you don't have a separate backend to call and you don't use fetch. I'm currently working on a solution that works with Next.js as your sole backend.
 
 Parallel Request Handling: Multiple simultaneous requests with expired tokens may trigger multiple refresh attempts. I'm considering implementing request queuing (I do not currently need it for my use case but may add it if I find it useful or there's any demand).
 
